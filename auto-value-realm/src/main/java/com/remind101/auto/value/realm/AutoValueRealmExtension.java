@@ -172,35 +172,24 @@ public class AutoValueRealmExtension extends AutoValueExtension {
     }
 
     private ClassName getRealmObjectType(Context context) {
-        StringBuilder builder = new StringBuilder();
-        builder.append(context.autoValueClass().getSimpleName());
-        Element element = context.autoValueClass();
-        while (element.getEnclosingElement() != null && element.getEnclosingElement().getKind().isClass()) {
-            element = element.getEnclosingElement();
-            builder.insert(0, element.getSimpleName() + "_");
-        }
-        return ClassName.get(context.packageName(), "$Realm" + builder.toString());
+        return ClassName.get(context.packageName(), "$Realm" + getClassNameWithEnclosingClasses(context.autoValueClass(), "_"));
     }
 
     private ClassName getAvObjectType(Context context) {
-        StringBuilder builder = new StringBuilder();
-        builder.append(context.autoValueClass().getSimpleName());
-        Element element = context.autoValueClass();
-        while (element.getEnclosingElement() != null && element.getEnclosingElement().getKind().isClass()) {
-            element = element.getEnclosingElement();
-            builder.insert(0, element.getSimpleName() + ".");
-        }
-        return ClassName.get(context.packageName(), builder.toString());
+        return ClassName.get(context.packageName(), getClassNameWithEnclosingClasses(context.autoValueClass(), "."));
     }
 
     private ClassName getAvImplType(Context context) {
+        return ClassName.get(context.packageName(), "AutoValue_" + getClassNameWithEnclosingClasses(context.autoValueClass(), "_"));
+    }
+
+    private String getClassNameWithEnclosingClasses(Element element, String separator) {
         StringBuilder builder = new StringBuilder();
-        builder.append(context.autoValueClass().getSimpleName());
-        Element element = context.autoValueClass();
+        builder.append(element.getSimpleName());
         while (element.getEnclosingElement() != null && element.getEnclosingElement().getKind().isClass()) {
             element = element.getEnclosingElement();
-            builder.insert(0, element.getSimpleName() + "_");
+            builder.insert(0, element.getSimpleName() + separator);
         }
-        return ClassName.get(context.packageName(), "AutoValue_" + builder.toString());
+        return builder.toString();
     }
 }
