@@ -83,16 +83,19 @@ public class AutoValueRealmExtension extends AutoValueExtension {
                 .addSuperinterface(ParameterizedTypeName.get(ClassName.get(AvRealmModel.class), getAvObjectType(context)));
 
         for (Map.Entry<String, ExecutableElement> property : context.properties().entrySet()) {
+            boolean isPrimaryKey = property.getValue().getAnnotation(AvPrimaryKey.class) != null;
             TypeName propertyType = TypeName.get(property.getValue().getReturnType());
-            FieldSpec field = FieldSpec.builder(propertyType, property.getKey())
-                    .addModifiers(Modifier.PRIVATE)
-                    .build();
+            FieldSpec.Builder fieldBuilder = FieldSpec.builder(propertyType, property.getKey())
+                    .addModifiers(Modifier.PRIVATE);
+            if (isPrimaryKey) {
+                fieldBuilder.addAnnotation(ClassName.get("io.realm.annotations", "PrimaryKey"));
+            }
             MethodSpec setter = MethodSpec.methodBuilder(getSetterName(property.getKey()))
                     .addModifiers(Modifier.PUBLIC)
                     .addParameter(propertyType, property.getKey())
                     .addStatement("this.$N = $N", property.getKey(), property.getKey())
                     .build();
-            realmObjectClassBuilder.addField(field);
+            realmObjectClassBuilder.addField(fieldBuilder.build());
             realmObjectClassBuilder.addMethod(setter);
         }
 

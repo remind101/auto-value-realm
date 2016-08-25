@@ -22,9 +22,9 @@ public class RealmDatastore {
     }
 
     @Nullable
-    public PersistedState getSavedState() {
+    public PersistedState getSavedState(String name) {
         Realm realm = Realm.getDefaultInstance();
-        RealmResults<$RealmPersistedState> res = realm.where($RealmPersistedState.class).findAll();
+        RealmResults<$RealmPersistedState> res = realm.where($RealmPersistedState.class).equalTo("name", name).findAll();
         if (res.isEmpty()) {
             return null;
         }
@@ -34,7 +34,7 @@ public class RealmDatastore {
     public void savePersistedState(PersistedState state) {
         Realm realm = Realm.getDefaultInstance();
         realm.beginTransaction();
-        realm.copyToRealm(state.toRealmObject());
+        realm.copyToRealmOrUpdate(state.toRealmObject());
         realm.commitTransaction();
     }
 }

@@ -12,9 +12,9 @@ public class HomeActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.home_layout);
 
-        PersistedState state = RealmDatastore.getInstance().getSavedState();
+        PersistedState state = RealmDatastore.getInstance().getSavedState("MyCounter");
         if (state == null) {
-            state = PersistedState.builder().setNumAppLaunches(0).build();
+            state = PersistedState.builder().setNumAppLaunches(0).setName("MyCounter").build();
         } else {
             state = state.withNumAppLaunches(state.getNumAppLaunches() + 1);
         }
