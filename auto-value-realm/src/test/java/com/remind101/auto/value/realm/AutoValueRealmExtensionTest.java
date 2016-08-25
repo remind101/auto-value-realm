@@ -14,7 +14,7 @@ import static com.google.testing.compile.JavaSourcesSubjectFactory.javaSources;
 
 public class AutoValueRealmExtensionTest {
     @Test
-    public void testName() throws Exception {
+    public void testEmptyClass() throws Exception {
         JavaFileObject source = JavaFileObjects.forSourceString("test.Test", ""
                 + "package test;\n"
                 + "import com.google.auto.value.AutoValue;\n"
@@ -26,7 +26,9 @@ public class AutoValueRealmExtensionTest {
         JavaFileObject expectedRealmObject = JavaFileObjects.forSourceString("test/$RealmTest", ""
                 + "package test;\n"
                 + "\n"
-                + "final class $RealmTest {\n"
+                + "import io.realm.RealmObject;\n"
+                + "\n"
+                + "final class $RealmTest extends RealmObject {\n"
                 + "}\n"
         );
 
@@ -38,7 +40,8 @@ public class AutoValueRealmExtensionTest {
                 + "abstract class AutoValue_Test extends $AutoValue_Test {\n"
                 + "    @Override\n"
                 + "    public final $RealmTest toRealmObject() {\n"
-                + "        return null;\n"
+                + "        $RealmTest realmObject = new $RealmTest();\n"
+                + "        return realmObject;\n"
                 + "    }\n"
                 + "}\n"
         );

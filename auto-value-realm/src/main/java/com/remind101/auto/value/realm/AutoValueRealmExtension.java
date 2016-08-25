@@ -5,6 +5,7 @@ import com.google.auto.value.extension.AutoValueExtension;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
+import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 
 import java.io.IOException;
@@ -55,6 +56,7 @@ public class AutoValueRealmExtension extends AutoValueExtension {
     private void createRealmObjectClass(Context context) {
         TypeSpec realmObjectClass = TypeSpec.classBuilder(getRealmObjectClassName(context.autoValueClass().getSimpleName().toString()))
                 .addModifiers(Modifier.FINAL)
+                .superclass(ClassName.get("io.realm", "RealmObject"))
                 .build();
 
 
@@ -67,11 +69,13 @@ public class AutoValueRealmExtension extends AutoValueExtension {
     }
 
     private MethodSpec createToRealmObjectMethod(String packageName, String autoValueClassName) {
+        TypeName realmObjectType = ClassName.get(packageName, getRealmObjectClassName(autoValueClassName));
         MethodSpec.Builder builder = MethodSpec.methodBuilder(TO_REALM_OBJECT_METHOD_NAME)
                 .addAnnotation(Override.class)
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-                .returns(ClassName.get(packageName, getRealmObjectClassName(autoValueClassName)))
-                .addStatement("return null");
+                .returns(realmObjectType)
+                .addStatement("$T realmObject = new $T()", realmObjectType, realmObjectType)
+                .addStatement("return realmObject");
         return builder.build();
     }
 
