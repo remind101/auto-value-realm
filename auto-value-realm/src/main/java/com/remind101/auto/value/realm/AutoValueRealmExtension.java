@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.type.TypeMirror;
@@ -171,14 +172,35 @@ public class AutoValueRealmExtension extends AutoValueExtension {
     }
 
     private ClassName getRealmObjectType(Context context) {
-        return ClassName.get(context.packageName(), "$Realm" + context.autoValueClass().getSimpleName().toString());
+        StringBuilder builder = new StringBuilder();
+        builder.append(context.autoValueClass().getSimpleName());
+        Element element = context.autoValueClass();
+        while (element.getEnclosingElement() != null && element.getEnclosingElement().getKind().isClass()) {
+            element = element.getEnclosingElement();
+            builder.insert(0, element.getSimpleName() + "_");
+        }
+        return ClassName.get(context.packageName(), "$Realm" + builder.toString());
     }
 
     private ClassName getAvObjectType(Context context) {
-        return ClassName.get(context.packageName(), context.autoValueClass().getSimpleName().toString());
+        StringBuilder builder = new StringBuilder();
+        builder.append(context.autoValueClass().getSimpleName());
+        Element element = context.autoValueClass();
+        while (element.getEnclosingElement() != null && element.getEnclosingElement().getKind().isClass()) {
+            element = element.getEnclosingElement();
+            builder.insert(0, element.getSimpleName() + ".");
+        }
+        return ClassName.get(context.packageName(), builder.toString());
     }
 
     private ClassName getAvImplType(Context context) {
-        return ClassName.get(context.packageName(), "AutoValue_" + context.autoValueClass().getSimpleName().toString());
+        StringBuilder builder = new StringBuilder();
+        builder.append(context.autoValueClass().getSimpleName());
+        Element element = context.autoValueClass();
+        while (element.getEnclosingElement() != null && element.getEnclosingElement().getKind().isClass()) {
+            element = element.getEnclosingElement();
+            builder.insert(0, element.getSimpleName() + "_");
+        }
+        return ClassName.get(context.packageName(), "AutoValue_" + builder.toString());
     }
 }

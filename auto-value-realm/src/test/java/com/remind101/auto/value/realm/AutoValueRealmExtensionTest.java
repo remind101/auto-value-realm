@@ -405,4 +405,107 @@ public class AutoValueRealmExtensionTest {
                 .and()
                 .generatesSources(expectedRealmObject, expectedSource);
     }
+
+    @Test
+    public void testInnerClass() throws Exception {
+        JavaFileObject source = JavaFileObjects.forSourceString("test.Test", ""
+                + "package test;\n"
+                + "import com.google.auto.value.AutoValue;\n"
+                + "@AutoValue public abstract class Test {\n"
+                + "    abstract int getValue();\n"
+                + "    abstract $RealmTest toRealmObject();\n"
+                + "    @AutoValue public static abstract class Inner {\n"
+                + "        abstract long getCount();\n"
+                + "        abstract $RealmTest_Inner toRealmObject();\n"
+                + "    }\n"
+                + "}\n"
+        );
+
+        JavaFileObject expectedRealmObject = JavaFileObjects.forSourceString("test/$RealmTest", ""
+                + "package test;\n"
+                + "\n"
+                + "import com.remind101.auto.value.realm.AvRealmModel;\n"
+                + "import io.realm.RealmObject;\n"
+                + "import java.lang.Override;\n"
+                + "\n"
+                + "public class $RealmTest extends RealmObject implements AvRealmModel<Test> {\n"
+                + "    private int value;\n"
+                + "\n"
+                + "    public void setValue(int value) {\n"
+                + "        this.value = value;\n"
+                + "    }\n"
+                + "\n"
+                + "    @Override\n"
+                + "    public final Test toModel() {\n"
+                + "        return new AutoValue_Test(value);\n"
+                + "    }\n"
+                + "}\n"
+        );
+
+        JavaFileObject expectedRealmObjectInner = JavaFileObjects.forSourceString("test/$RealmTest_Inner", ""
+                + "package test;\n"
+                + "\n"
+                + "import com.remind101.auto.value.realm.AvRealmModel;\n"
+                + "import io.realm.RealmObject;\n"
+                + "import java.lang.Override;\n"
+                + "\n"
+                + "public class $RealmTest_Inner extends RealmObject implements AvRealmModel<Test.Inner> {\n"
+                + "    private long count;\n"
+                + "\n"
+                + "    public void setCount(long count) {\n"
+                + "        this.count = count;\n"
+                + "    }\n"
+                + "\n"
+                + "    @Override\n"
+                + "    public final Test.Inner toModel() {\n"
+                + "        return new AutoValue_Test_Inner(count);\n"
+                + "    }\n"
+                + "}\n"
+        );
+
+        JavaFileObject expectedSource = JavaFileObjects.forSourceString("test/AutoValue_Test", ""
+                + "package test;\n"
+                + "\n"
+                + "import java.lang.Override;\n"
+                + "\n"
+                + "final class AutoValue_Test extends $AutoValue_Test {\n"
+                + "    AutoValue_Test(int value) {\n"
+                + "        super(value);\n"
+                + "    }\n"
+                + "\n"
+                + "    @Override\n"
+                + "    public final $RealmTest toRealmObject() {\n"
+                + "        $RealmTest realmObject = new $RealmTest();\n"
+                + "        realmObject.setValue(getValue());\n"
+                + "        return realmObject;\n"
+                + "    }\n"
+                + "}\n"
+        );
+
+        JavaFileObject expectedSourceInner = JavaFileObjects.forSourceString("test/AutoValue_Test_Inner", ""
+                + "package test;\n"
+                + "\n"
+                + "import java.lang.Override;\n"
+                + "\n"
+                + "final class AutoValue_Test_Inner extends $AutoValue_Test_Inner {\n"
+                + "    AutoValue_Test_Inner(long count) {\n"
+                + "        super(count);\n"
+                + "    }\n"
+                + "\n"
+                + "    @Override\n"
+                + "    public final $RealmTest_Inner toRealmObject() {\n"
+                + "        $RealmTest_Inner realmObject = new $RealmTest_Inner();\n"
+                + "        realmObject.setCount(getCount());\n"
+                + "        return realmObject;\n"
+                + "    }\n"
+                + "}\n"
+        );
+
+        assertAbout(javaSources())
+                .that(Arrays.asList(source))
+                .processedWith(new AutoValueProcessor())
+                .compilesWithoutError()
+                .and()
+                .generatesSources(expectedRealmObject, expectedSource, expectedRealmObjectInner, expectedSourceInner);
+    }
 }
