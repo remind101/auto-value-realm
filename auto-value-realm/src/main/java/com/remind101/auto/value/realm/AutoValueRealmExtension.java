@@ -84,11 +84,15 @@ public class AutoValueRealmExtension extends AutoValueExtension {
 
         for (Map.Entry<String, ExecutableElement> property : context.properties().entrySet()) {
             boolean isPrimaryKey = property.getValue().getAnnotation(AvPrimaryKey.class) != null;
+            boolean isIndex = property.getValue().getAnnotation(AvIndex.class) != null;
             TypeName propertyType = TypeName.get(property.getValue().getReturnType());
             FieldSpec.Builder fieldBuilder = FieldSpec.builder(propertyType, property.getKey())
                     .addModifiers(Modifier.PRIVATE);
             if (isPrimaryKey) {
                 fieldBuilder.addAnnotation(ClassName.get("io.realm.annotations", "PrimaryKey"));
+            }
+            if (isIndex) {
+                fieldBuilder.addAnnotation(ClassName.get("io.realm.annotations", "Index"));
             }
             MethodSpec setter = MethodSpec.methodBuilder(getSetterName(property.getKey()))
                     .addModifiers(Modifier.PUBLIC)
