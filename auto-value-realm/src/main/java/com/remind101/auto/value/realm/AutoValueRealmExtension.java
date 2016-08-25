@@ -3,23 +3,33 @@ package com.remind101.auto.value.realm;
 import com.google.auto.service.AutoService;
 import com.google.auto.value.extension.AutoValueExtension;
 import com.squareup.javapoet.ClassName;
+import com.squareup.javapoet.FieldSpec;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
+import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
+import javax.lang.model.type.TypeMirror;
 
 @AutoService(AutoValueExtension.class)
 public class AutoValueRealmExtension extends AutoValueExtension {
     private static final String TO_REALM_OBJECT_METHOD_NAME = "toRealmObject";
     private static final String TO_MODEL_METHOD_NAME = "toModel";
+
+    private static final List<String> SUPPORTED_TYPES = Arrays.asList(String.class.getName(), Date.class.getName(), byte[].class.getName(), Boolean.class.getName(), Byte.class.getName(), Short.class.getName(), Integer.class.getName(), Float.class.getName(), Long.class.getName(), Double.class.getName());
 
     @Override
     public boolean applicable(Context context) {
@@ -43,27 +53,51 @@ public class AutoValueRealmExtension extends AutoValueExtension {
 
     @Override
     public String generateClass(Context context, String className, String classToExtend, boolean isFinal) {
+        verifyInput(context);
         createRealmObjectClass(context);
 
         String packageName = context.packageName();
         TypeSpec subclass = TypeSpec.classBuilder(className)
                 .addModifiers(isFinal ? Modifier.FINAL : Modifier.ABSTRACT)
                 .superclass(ClassName.get(packageName, classToExtend))
+                .addMethod(createAutoValueConstructor(context))
                 .addMethod(createToRealmObjectMethod(context))
                 .build();
         JavaFile javaFile = JavaFile.builder(packageName, subclass).build();
         return javaFile.toString();
     }
 
-    private void createRealmObjectClass(Context context) {
-        TypeSpec realmObjectClass = TypeSpec.classBuilder(getRealmObjectType(context).simpleName())
-                .addModifiers(Modifier.FINAL)
-                .superclass(ClassName.get("io.realm", "RealmObject"))
-                .addSuperinterface(ParameterizedTypeName.get(ClassName.get(AvRealmModel.class), getAvObjectType(context)))
-                .addMethod(createRealmToModelMethod(context))
-                .build();
+    private void verifyInput(Context context) {
+        for (Map.Entry<String, ExecutableElement> entry : context.properties().entrySet()) {
+            TypeMirror returnType = entry.getValue().getReturnType();
+            if (!returnType.getKind().isPrimitive() && !SUPPORTED_TYPES.contains(returnType.toString())) {
+                throw new IllegalArgumentException(context.autoValueClass().getSimpleName().toString() + "." + entry.getKey() +" is of a non supported type: " + entry.getValue().getReturnType().toString());
+            }
+        }
+    }
 
-        JavaFile file = JavaFile.builder(context.packageName(), realmObjectClass).build();
+    private void createRealmObjectClass(Context context) {
+        TypeSpec.Builder realmObjectClassBuilder = TypeSpec.classBuilder(getRealmObjectType(context).simpleName())
+                .addModifiers(Modifier.PUBLIC)
+                .superclass(ClassName.get("io.realm", "RealmObject"))
+                .addSuperinterface(ParameterizedTypeName.get(ClassName.get(AvRealmModel.class), getAvObjectType(context)));
+
+        for (Map.Entry<String, ExecutableElement> property : context.properties().entrySet()) {
+            TypeName propertyType = TypeName.get(property.getValue().getReturnType());
+            FieldSpec field = FieldSpec.builder(propertyType, property.getKey())
+                    .addModifiers(Modifier.PRIVATE)
+                    .build();
+            MethodSpec setter = MethodSpec.methodBuilder(getSetterName(property.getKey()))
+                    .addModifiers(Modifier.PUBLIC)
+                    .addParameter(propertyType, property.getKey())
+                    .addStatement("this.$N = $N", property.getKey(), property.getKey())
+                    .build();
+            realmObjectClassBuilder.addField(field);
+            realmObjectClassBuilder.addMethod(setter);
+        }
+
+        realmObjectClassBuilder.addMethod(createRealmToModelMethod(context));
+        JavaFile file = JavaFile.builder(context.packageName(), realmObjectClassBuilder.build()).build();
         try {
             file.writeTo(context.processingEnvironment().getFiler());
         } catch (IOException e) {
@@ -71,12 +105,41 @@ public class AutoValueRealmExtension extends AutoValueExtension {
         }
     }
 
+    private static MethodSpec createAutoValueConstructor(Context context) {
+        List<ParameterSpec> params = new ArrayList<>();
+        for (Map.Entry<String, ExecutableElement> entry : context.properties().entrySet()) {
+            TypeName typeName = TypeName.get(entry.getValue().getReturnType());
+            params.add(ParameterSpec.builder(typeName, entry.getKey()).build());
+        }
+
+        StringBuilder body = new StringBuilder("super(");
+        for (int i = context.properties().size(); i > 0; i--) {
+            body.append("$N");
+            if (i > 1) body.append(", ");
+        }
+        body.append(")");
+
+        return MethodSpec.constructorBuilder()
+                .addParameters(params)
+                .addStatement(body.toString(), context.properties().keySet().toArray())
+                .build();
+    }
+
     private MethodSpec createRealmToModelMethod(Context context) {
+        StringBuilder returnStatement = new StringBuilder("return new $T(");
+        String[] propertyNames = context.properties().keySet().toArray(new String[context.properties().size()]);
+        for (int i = 0; i < context.properties().size(); i++) {
+            if (i != 0) {
+                returnStatement.append(", ");
+            }
+            returnStatement.append(propertyNames[i]);
+        }
+        returnStatement.append(")");
         MethodSpec.Builder builder = MethodSpec.methodBuilder(TO_MODEL_METHOD_NAME)
                 .addAnnotation(Override.class)
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                 .returns(getAvObjectType(context))
-                .addStatement("return new $T()", getAvImplType(context));
+                .addStatement(returnStatement.toString(), getAvImplType(context));
         return builder.build();
     }
 
@@ -86,9 +149,18 @@ public class AutoValueRealmExtension extends AutoValueExtension {
                 .addAnnotation(Override.class)
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                 .returns(realmObjectType)
-                .addStatement("$T realmObject = new $T()", realmObjectType, realmObjectType)
-                .addStatement("return realmObject");
+                .addStatement("$T realmObject = new $T()", realmObjectType, realmObjectType);
+
+        for (Map.Entry<String, ExecutableElement> property : context.properties().entrySet()) {
+            builder.addStatement("realmObject.$N($N())", getSetterName(property.getKey()), property.getValue().getSimpleName().toString());
+        }
+
+        builder.addStatement("return realmObject");
         return builder.build();
+    }
+
+    private String getSetterName(String propertyName) {
+        return "set" + propertyName.substring(0, 1).toUpperCase() + propertyName.substring(1);
     }
 
     private ClassName getRealmObjectType(Context context) {

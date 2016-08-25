@@ -1,4 +1,4 @@
-package com.remind101.auto.value.realm;
+package com.remind101.auto.value.example;
 
 import org.junit.Test;
 
