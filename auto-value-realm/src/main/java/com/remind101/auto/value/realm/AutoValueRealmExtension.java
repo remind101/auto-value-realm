@@ -23,7 +23,11 @@ import java.util.Set;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Types;
 
 @AutoService(AutoValueExtension.class)
 public class AutoValueRealmExtension extends AutoValueExtension {
@@ -31,6 +35,7 @@ public class AutoValueRealmExtension extends AutoValueExtension {
     private static final String TO_MODEL_METHOD_NAME = "toModel";
 
     private static final List<String> SUPPORTED_TYPES = Arrays.asList(String.class.getName(), Date.class.getName(), byte[].class.getName(), Boolean.class.getName(), Byte.class.getName(), Short.class.getName(), Integer.class.getName(), Float.class.getName(), Long.class.getName(), Double.class.getName());
+    private ClassName avRealmHelper = ClassName.get("com.remind101.auto.value.realm", "AvRealmHelper");
 
     @Override
     public boolean applicable(Context context) {
@@ -73,7 +78,8 @@ public class AutoValueRealmExtension extends AutoValueExtension {
             TypeMirror returnType = entry.getValue().getReturnType();
             if (!returnType.getKind().isPrimitive()
                     && !SUPPORTED_TYPES.contains(returnType.toString())
-                    && !isOtherAvModel(context, entry.getValue())) {
+                    && !isOtherAvModel(context, entry.getValue())
+                    && !isListOfOtherAvModel(context, entry.getValue())) {
                 throw new IllegalArgumentException(context.autoValueClass().getSimpleName().toString() + "." + entry.getKey() +" is of a non supported type: " + entry.getValue().getReturnType().toString());
             }
         }
@@ -93,6 +99,9 @@ public class AutoValueRealmExtension extends AutoValueExtension {
             if (isOtherAvModel(context, property.getValue())) {
                 propertyType = getRealmTypeName(property.getValue().getReturnType());
 
+            } else if (isListOfOtherAvModel(context, property.getValue())) {
+                TypeName otherRealmType = getRealmTypeName(getListGenericType(property.getValue().getReturnType()));
+                propertyType = ParameterizedTypeName.get(ClassName.get("io.realm", "RealmList"), otherRealmType);
             } else {
                 propertyType = TypeName.get(property.getValue().getReturnType());
             }
@@ -122,6 +131,17 @@ public class AutoValueRealmExtension extends AutoValueExtension {
         }
     }
 
+    private TypeMirror getListGenericType(TypeMirror type) {
+        if (!type.getKind().equals(TypeKind.DECLARED)) {
+            throw new RuntimeException("Cannot find list generic type");
+        }
+        List<? extends TypeMirror> generics = ((DeclaredType) type).getTypeArguments();
+        if (generics.size() != 1) {
+            throw new RuntimeException("Unexpected number of generics");
+        }
+        return generics.get(0);
+    }
+
     /**
      * Gives the TypeName of the Realm Model class of another AvModel than the one we are processing
      * @param otherAvType example: my.other.package.Foo.Inner
@@ -148,6 +168,14 @@ public class AutoValueRealmExtension extends AutoValueExtension {
         return context.processingEnvironment().getTypeUtils().isAssignable(getter.getReturnType(), avModel);
     }
 
+    private boolean isListOfOtherAvModel(Context context, ExecutableElement getter) {
+        Types typeUtils = context.processingEnvironment().getTypeUtils();
+        TypeElement list = context.processingEnvironment().getElementUtils().getTypeElement("java.util.List");
+        TypeMirror avModel = context.processingEnvironment().getElementUtils().getTypeElement("com.remind101.auto.value.realm.AvModel").asType();
+        TypeMirror parameterizedList = typeUtils.getDeclaredType(list, typeUtils.getWildcardType(avModel, null));
+        return context.processingEnvironment().getTypeUtils().isSubtype(getter.getReturnType(), parameterizedList);
+    }
+
     private static MethodSpec createAutoValueConstructor(Context context) {
         List<ParameterSpec> params = new ArrayList<>();
         for (Map.Entry<String, ExecutableElement> entry : context.properties().entrySet()) {
@@ -171,10 +199,17 @@ public class AutoValueRealmExtension extends AutoValueExtension {
     private MethodSpec createRealmToModelMethod(Context context) {
         StringBuilder returnStatement = new StringBuilder("return new $T(");
         List<String> arguments = new ArrayList<>();
+        List<ClassName> externalClassesNames = new ArrayList<>();
+        externalClassesNames.add(getAvImplType(context));
         for (Map.Entry<String, ExecutableElement> entry : context.properties().entrySet()) {
-            String arg = entry.getKey();
+            String arg;
             if (isOtherAvModel(context, entry.getValue())) {
-                arg += ".toModel()"; // We need to transform the field
+                arg = entry.getKey() + ".toModel()"; // We need to transform the field
+            } else if (isListOfOtherAvModel(context, entry.getValue())) {
+                externalClassesNames.add(avRealmHelper);
+                arg = "$T.fromRealmModels(" + entry.getKey() + ")";
+            } else {
+                arg = entry.getKey(); // Just use the field
             }
             arguments.add(arg);
         }
@@ -189,7 +224,7 @@ public class AutoValueRealmExtension extends AutoValueExtension {
                 .addAnnotation(Override.class)
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                 .returns(getAvObjectType(context))
-                .addStatement(returnStatement.toString(), getAvImplType(context));
+                .addStatement(returnStatement.toString(), externalClassesNames.toArray());
         return builder.build();
     }
 
@@ -204,6 +239,8 @@ public class AutoValueRealmExtension extends AutoValueExtension {
         for (Map.Entry<String, ExecutableElement> property : context.properties().entrySet()) {
             if (isOtherAvModel(context, property.getValue())) {
                 builder.addStatement("realmObject.$N($N().toRealmObject())", getSetterName(property.getKey()), property.getValue().getSimpleName().toString());
+            } else if (isListOfOtherAvModel(context, property.getValue())) {
+                builder.addStatement("realmObject.$N($T.toRealmModels($N()))", getSetterName(property.getKey()), avRealmHelper, property.getValue().getSimpleName().toString());
             } else {
                 builder.addStatement("realmObject.$N($N())", getSetterName(property.getKey()), property.getValue().getSimpleName().toString());
             }
