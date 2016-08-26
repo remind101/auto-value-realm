@@ -11,6 +11,8 @@ public abstract class PersistedState implements AvModel<$RealmPersistedState> {
 
     public abstract int getNumAppLaunches();
 
+    public abstract Info getInfo();
+
     @Override
     public abstract $RealmPersistedState toRealmObject();
 
@@ -30,6 +32,27 @@ public abstract class PersistedState implements AvModel<$RealmPersistedState> {
 
         public abstract Builder setNumAppLaunches(int numAppLaunches);
 
+        public abstract Builder setInfo(Info info);
+
         public abstract PersistedState build();
+    }
+
+    @AutoValue
+    public abstract static class Info implements AvModel<$RealmPersistedState_Info> {
+        public abstract String getTitle();
+
+        @Override
+        public abstract $RealmPersistedState_Info toRealmObject();
+
+        public static Builder builder() {
+            return new AutoValue_PersistedState_Info.Builder();
+        }
+
+        @AutoValue.Builder
+        public static abstract class Builder {
+            public abstract Builder setTitle(String title);
+
+            public abstract Info build();
+        }
     }
 }

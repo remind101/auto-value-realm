@@ -14,11 +14,15 @@ public class HomeActivity extends Activity {
 
         PersistedState state = RealmDatastore.getInstance().getSavedState("MyCounter");
         if (state == null) {
-            state = PersistedState.builder().setNumAppLaunches(0).setName("MyCounter").build();
+            state = PersistedState.builder().setNumAppLaunches(0)
+                    .setName("MyCounter")
+                    .setInfo(PersistedState.Info.builder().setTitle("HELLO").build())
+                    .build();
         } else {
             state = state.withNumAppLaunches(state.getNumAppLaunches() + 1);
         }
         RealmDatastore.getInstance().savePersistedState(state);
         ((TextView) findViewById(R.id.counter)).setText(String.valueOf(state.getNumAppLaunches()));
+        setTitle(state.getInfo().getTitle());
     }
 }

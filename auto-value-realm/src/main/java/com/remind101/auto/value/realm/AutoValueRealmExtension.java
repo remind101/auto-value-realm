@@ -71,7 +71,9 @@ public class AutoValueRealmExtension extends AutoValueExtension {
     private void verifyInput(Context context) {
         for (Map.Entry<String, ExecutableElement> entry : context.properties().entrySet()) {
             TypeMirror returnType = entry.getValue().getReturnType();
-            if (!returnType.getKind().isPrimitive() && !SUPPORTED_TYPES.contains(returnType.toString())) {
+            if (!returnType.getKind().isPrimitive()
+                    && !SUPPORTED_TYPES.contains(returnType.toString())
+                    && !isOtherAvModel(context, entry.getValue())) {
                 throw new IllegalArgumentException(context.autoValueClass().getSimpleName().toString() + "." + entry.getKey() +" is of a non supported type: " + entry.getValue().getReturnType().toString());
             }
         }
@@ -83,10 +85,18 @@ public class AutoValueRealmExtension extends AutoValueExtension {
                 .superclass(ClassName.get("io.realm", "RealmObject"))
                 .addSuperinterface(ParameterizedTypeName.get(ClassName.get(AvRealmModel.class), getAvObjectType(context)));
 
+        // Create the fields and the setters
         for (Map.Entry<String, ExecutableElement> property : context.properties().entrySet()) {
             boolean isPrimaryKey = property.getValue().getAnnotation(AvPrimaryKey.class) != null;
             boolean isIndex = property.getValue().getAnnotation(AvIndex.class) != null;
-            TypeName propertyType = TypeName.get(property.getValue().getReturnType());
+            TypeName propertyType;
+            if (isOtherAvModel(context, property.getValue())) {
+                String enclosedName = property.getValue().getReturnType().toString().substring(context.packageName().length() + 1).replaceAll("\\.", "_");
+                propertyType = ClassName.get(context.packageName(), "$Realm" + enclosedName);
+
+            } else {
+                propertyType = TypeName.get(property.getValue().getReturnType());
+            }
             FieldSpec.Builder fieldBuilder = FieldSpec.builder(propertyType, property.getKey())
                     .addModifiers(Modifier.PRIVATE);
             if (isPrimaryKey) {
@@ -113,6 +123,11 @@ public class AutoValueRealmExtension extends AutoValueExtension {
         }
     }
 
+    private boolean isOtherAvModel(Context context, ExecutableElement getter) {
+        TypeMirror avModel = context.processingEnvironment().getElementUtils().getTypeElement("com.remind101.auto.value.realm.AvModel").asType();
+        return context.processingEnvironment().getTypeUtils().isAssignable(getter.getReturnType(), avModel);
+    }
+
     private static MethodSpec createAutoValueConstructor(Context context) {
         List<ParameterSpec> params = new ArrayList<>();
         for (Map.Entry<String, ExecutableElement> entry : context.properties().entrySet()) {
@@ -135,12 +150,19 @@ public class AutoValueRealmExtension extends AutoValueExtension {
 
     private MethodSpec createRealmToModelMethod(Context context) {
         StringBuilder returnStatement = new StringBuilder("return new $T(");
-        String[] propertyNames = context.properties().keySet().toArray(new String[context.properties().size()]);
+        List<String> arguments = new ArrayList<>();
+        for (Map.Entry<String, ExecutableElement> entry : context.properties().entrySet()) {
+            String arg = entry.getKey();
+            if (isOtherAvModel(context, entry.getValue())) {
+                arg += ".toModel()"; // We need to transform the field
+            }
+            arguments.add(arg);
+        }
         for (int i = 0; i < context.properties().size(); i++) {
             if (i != 0) {
                 returnStatement.append(", ");
             }
-            returnStatement.append(propertyNames[i]);
+            returnStatement.append(arguments.get(i));
         }
         returnStatement.append(")");
         MethodSpec.Builder builder = MethodSpec.methodBuilder(TO_MODEL_METHOD_NAME)
@@ -160,7 +182,11 @@ public class AutoValueRealmExtension extends AutoValueExtension {
                 .addStatement("$T realmObject = new $T()", realmObjectType, realmObjectType);
 
         for (Map.Entry<String, ExecutableElement> property : context.properties().entrySet()) {
-            builder.addStatement("realmObject.$N($N())", getSetterName(property.getKey()), property.getValue().getSimpleName().toString());
+            if (isOtherAvModel(context, property.getValue())) {
+                builder.addStatement("realmObject.$N($N().toRealmObject())", getSetterName(property.getKey()), property.getValue().getSimpleName().toString());
+            } else {
+                builder.addStatement("realmObject.$N($N())", getSetterName(property.getKey()), property.getValue().getSimpleName().toString());
+            }
         }
 
         builder.addStatement("return realmObject");
