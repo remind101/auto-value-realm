@@ -91,8 +91,7 @@ public class AutoValueRealmExtension extends AutoValueExtension {
             boolean isIndex = property.getValue().getAnnotation(AvIndex.class) != null;
             TypeName propertyType;
             if (isOtherAvModel(context, property.getValue())) {
-                String enclosedName = property.getValue().getReturnType().toString().substring(context.packageName().length() + 1).replaceAll("\\.", "_");
-                propertyType = ClassName.get(context.packageName(), "$Realm" + enclosedName);
+                propertyType = getRealmTypeName(property.getValue().getReturnType());
 
             } else {
                 propertyType = TypeName.get(property.getValue().getReturnType());
@@ -121,6 +120,22 @@ public class AutoValueRealmExtension extends AutoValueExtension {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private TypeName getRealmTypeName(TypeMirror otherAvType) {
+        String avTypeString = otherAvType.toString();
+        int packageNameLength = -1;
+        for (int i = 0; i < avTypeString.length(); i++) {
+            if (Character.isUpperCase(avTypeString.charAt(i))) {
+                packageNameLength = i;
+                break;
+            }
+        }
+        if (packageNameLength == -1) {
+            throw new RuntimeException("Could not figure out package name for class " + avTypeString + ". This should never happen");
+        }
+        String enclosedName = avTypeString.substring(packageNameLength).replaceAll("\\.", "_");
+        return ClassName.get(avTypeString.substring(0, packageNameLength - 1), "$Realm" + enclosedName);
     }
 
     private boolean isOtherAvModel(Context context, ExecutableElement getter) {

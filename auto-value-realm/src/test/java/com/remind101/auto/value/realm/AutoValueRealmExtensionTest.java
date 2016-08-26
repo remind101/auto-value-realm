@@ -730,4 +730,117 @@ public class AutoValueRealmExtensionTest {
                 .and()
                 .generatesSources(expectedRealmObject1, expectedSource1, expectedRealmObject2, expectedSource2);
     }
+
+    @Test
+    public void testOneToOneRelationshipDifferentPackages() throws Exception {
+        JavaFileObject source1 = JavaFileObjects.forSourceString("test.Foo", ""
+                + "package test;\n"
+                + "import com.google.auto.value.AutoValue;\n"
+                + "import com.remind101.auto.value.realm.AvModel;\n"
+                + "import test2.Bar;\n"
+                + "@AutoValue public abstract class Foo implements AvModel<$RealmFoo> {\n"
+                + "    abstract Bar getBar();\n"
+                + "    @Override public abstract $RealmFoo toRealmObject();\n"
+                + "}\n"
+        );
+
+        JavaFileObject source2 = JavaFileObjects.forSourceString("test2.Bar", ""
+                + "package test2;\n"
+                + "import com.google.auto.value.AutoValue;\n"
+                + "import com.remind101.auto.value.realm.AvModel;\n"
+                + "@AutoValue public abstract class Bar implements AvModel<$RealmBar> {\n"
+                + "    abstract int getValue();\n"
+                + "    @Override public abstract $RealmBar toRealmObject();\n"
+                + "}\n"
+        );
+
+        JavaFileObject expectedRealmObject1 = JavaFileObjects.forSourceString("test/$RealmFoo", ""
+                + "package test;\n"
+                + "\n"
+                + "import com.remind101.auto.value.realm.AvRealmModel;\n"
+                + "import io.realm.RealmObject;\n"
+                + "import java.lang.Override;\n"
+                + "import test2.$RealmBar;\n"
+                + "\n"
+                + "public class $RealmFoo extends RealmObject implements AvRealmModel<Foo> {\n"
+                + "    private $RealmBar bar;\n"
+                + "\n"
+                + "    public void setBar($RealmBar bar) {\n"
+                + "        this.bar = bar;\n"
+                + "    }\n"
+                + "\n"
+                + "    @Override\n"
+                + "    public final Foo toModel() {\n"
+                + "        return new AutoValue_Foo(bar.toModel());\n"
+                + "    }\n"
+                + "}\n"
+        );
+
+        JavaFileObject expectedRealmObject2 = JavaFileObjects.forSourceString("test2/$RealmBar", ""
+                + "package test2;\n"
+                + "\n"
+                + "import com.remind101.auto.value.realm.AvRealmModel;\n"
+                + "import io.realm.RealmObject;\n"
+                + "import java.lang.Override;\n"
+                + "\n"
+                + "public class $RealmBar extends RealmObject implements AvRealmModel<Bar> {\n"
+                + "    private int value;\n"
+                + "\n"
+                + "    public void setValue(int value) {\n"
+                + "        this.value = value;\n"
+                + "    }\n"
+                + "\n"
+                + "    @Override\n"
+                + "    public final Bar toModel() {\n"
+                + "        return new AutoValue_Bar(value);\n"
+                + "    }\n"
+                + "}\n"
+        );
+
+        JavaFileObject expectedSource1 = JavaFileObjects.forSourceString("test/AutoValue_Foo", ""
+                + "package test;\n"
+                + "\n"
+                + "import java.lang.Override;\n"
+                + "import test2.Bar;\n"
+                + "\n"
+                + "final class AutoValue_Foo extends $AutoValue_Foo {\n"
+                + "    AutoValue_Foo(Bar bar) {\n"
+                + "        super(bar);\n"
+                + "    }\n"
+                + "\n"
+                + "    @Override\n"
+                + "    public final $RealmFoo toRealmObject() {\n"
+                + "        $RealmFoo realmObject = new $RealmFoo();\n"
+                + "        realmObject.setBar(getBar().toRealmObject());\n"
+                + "        return realmObject;\n"
+                + "    }\n"
+                + "}\n"
+        );
+
+        JavaFileObject expectedSource2 = JavaFileObjects.forSourceString("test/AutoValue_Bar", ""
+                + "package test2;\n"
+                + "\n"
+                + "import java.lang.Override;\n"
+                + "\n"
+                + "final class AutoValue_Bar extends $AutoValue_Bar {\n"
+                + "    AutoValue_Bar(int value) {\n"
+                + "        super(value);\n"
+                + "    }\n"
+                + "\n"
+                + "    @Override\n"
+                + "    public final $RealmBar toRealmObject() {\n"
+                + "        $RealmBar realmObject = new $RealmBar();\n"
+                + "        realmObject.setValue(getValue());\n"
+                + "        return realmObject;\n"
+                + "    }\n"
+                + "}\n"
+        );
+
+        assertAbout(javaSources())
+                .that(Arrays.asList(source1, source2))
+                .processedWith(new AutoValueProcessor())
+                .compilesWithoutError()
+                .and()
+                .generatesSources(expectedRealmObject1, expectedSource1, expectedRealmObject2, expectedSource2);
+    }
 }
