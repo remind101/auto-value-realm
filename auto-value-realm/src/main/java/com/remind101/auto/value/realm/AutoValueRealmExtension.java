@@ -122,6 +122,11 @@ public class AutoValueRealmExtension extends AutoValueExtension {
         }
     }
 
+    /**
+     * Gives the TypeName of the Realm Model class of another AvModel than the one we are processing
+     * @param otherAvType example: my.other.package.Foo.Inner
+     * @return example: my.other.package.$RealmFoo_Inner
+     */
     private TypeName getRealmTypeName(TypeMirror otherAvType) {
         String avTypeString = otherAvType.toString();
         int packageNameLength = -1;
